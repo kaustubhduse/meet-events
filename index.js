@@ -5,27 +5,41 @@ const app = express();
 app.use(express.json());
 
 app.post("/events", (req, res) => {
-const participant =
-req.body?.participant?.user?.displayName ||
-req.body?.participant?.name ||
-"Unknown User";
 
-// Log once when the event arrives
-console.log(`${participant} joined the room`);
+  let participant = "Unknown User";
 
-// Log the full payload
-console.log(JSON.stringify(req.body, null, 2));
+  try {
 
-// Log once after 3 minutes
-setTimeout(() => {
-console.log(`3 MINUTES PASSED for ${participant}`);
-}, 180000);
+    const decoded = JSON.parse(
+      Buffer.from(
+        req.body.message.data,
+        "base64"
+      ).toString()
+    );
 
-res.status(200).send("OK");
+    participant =
+      decoded?.participant?.user?.displayName ||
+      "Unknown User";
+
+    console.log(`${participant} joined the room`);
+
+    console.log(decoded);
+
+  } catch (err) {
+
+    console.log("Failed to decode");
+
+    console.log(req.body);
+
+  }
+
+  setTimeout(() => {
+    console.log(
+      `3 MINUTES PASSED for ${participant}`
+    );
+  }, 180000);
+
+  res.status(200).send("OK");
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-console.log(`Server running on port ${PORT}`);
-});
+app.listen(process.env.PORT || 3000);
