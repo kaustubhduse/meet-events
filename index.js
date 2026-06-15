@@ -25,19 +25,14 @@ app.post("/events", (req, res) => {
 
     console.log(decoded);
 
-  } catch (err) {
+  } 
+  catch (err) {
 
     console.log("Failed to decode");
 
     console.log(req.body);
 
   }
-
-  setTimeout(() => {
-    console.log(
-      `3 MINUTES PASSED for ${participant}`
-    );
-  }, 180000);
 
   res.status(200).send("OK");
 });
