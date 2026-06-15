@@ -31,13 +31,28 @@ app.post("/events", async (req, res) => {
     });
     const participant = await r.json();
 
-    const name =
-      participant?.signedinUser?.displayName ||
-      participant?.anonymousUser?.displayName ||
-      participant?.phoneUser?.displayName ||
-      "Unknown User";
+    // Figure out type + best-available identity
+    let name = "Unknown User";
+    let type = "unknown";
+    let userId = null;       // opaque ID, only for signed-in users
+    let email = null;        // almost always null — Meet does not expose it
+
+    if (participant?.signedinUser) {
+      type = "signed-in";
+      name = participant.signedinUser.displayName || name;
+      userId = participant.signedinUser.user || null; // opaque, NOT an email
+    } else if (participant?.anonymousUser) {
+      type = "anonymous";
+      name = participant.anonymousUser.displayName || name;
+    } else if (participant?.phoneUser) {
+      type = "phone";
+      name = participant.phoneUser.displayName || name;
+    }
 
     console.log(`${name} joined the room`);
+    console.log(`  type: ${type}, userId: ${userId}, email: ${email}`);
+    // Tip: log the raw object once to see exactly what your accounts return:
+    // console.log(JSON.stringify(participant));
   } catch (err) {
     console.log("Error:", err.message);
   }
