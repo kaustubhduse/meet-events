@@ -1,15 +1,19 @@
 const express = require("express");
-const { GoogleAuth } = require("google-auth-library");
+const { OAuth2Client } = require("google-auth-library");
 
 const app = express();
 app.use(express.json());
 
-const auth = new GoogleAuth({
-  scopes: ["https://www.googleapis.com/auth/meetings.space.readonly"],
-});
+const oauth2 = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET
+);
+oauth2.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+
+app.get("/", (_req, res) => res.send("meet-events webhook alive"));
 
 app.post("/events", async (req, res) => {
-  res.status(200).send("OK"); // ACK immediately
+  res.status(200).send("OK");
 
   try {
     const decoded = JSON.parse(
@@ -17,17 +21,11 @@ app.post("/events", async (req, res) => {
     );
 
     const sessionName = decoded?.participantSession?.name;
-    if (!sessionName) {
-      console.log("No participantSession in payload:", decoded);
-      return;
-    }
+    if (!sessionName) return;
 
-    // participantSessions/.../ -> the parent participant resource
     const participantName = sessionName.split("/participantSessions/")[0];
 
-    const client = await auth.getClient();
-    const token = (await client.getAccessToken()).token;
-
+    const { token } = await oauth2.getAccessToken();
     const r = await fetch(`https://meet.googleapis.com/v2/${participantName}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -42,7 +40,6 @@ app.post("/events", async (req, res) => {
     console.log(`${name} joined the room`);
   } catch (err) {
     console.log("Error:", err.message);
-    console.log(req.body);
   }
 });
 
