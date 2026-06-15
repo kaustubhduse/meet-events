@@ -16,80 +16,58 @@ app.post("/events", async (req, res) => {
   res.status(200).send("OK");
 
   try {
-    console.log("==================== NEW EVENT ====================");
-
-    // 1) Raw Pub/Sub envelope (attributes + message metadata)
-    console.log("--- Pub/Sub attributes ---");
-    console.log(JSON.stringify(req.body?.message?.attributes, null, 2));
-    console.log("messageId:", req.body?.message?.messageId);
-    console.log("publishTime:", req.body?.message?.publishTime);
-
-    // 2) Decoded event payload (what Workspace Events sent)
     const decoded = JSON.parse(
       Buffer.from(req.body.message.data, "base64").toString()
     );
-    console.log("--- Decoded event payload ---");
-    console.log(JSON.stringify(decoded, null, 2));
-
     const sessionName = decoded?.participantSession?.name;
-    if (!sessionName) {
-      console.log("No participantSession.name in payload");
-      return;
-    }
-    console.log("participantSession.name:", sessionName);
+    if (!sessionName) return;
 
-    // Parent participant resource + the raw IDs in the path
     const participantName = sessionName.split("/participantSessions/")[0];
-    const sessionId = sessionName.split("/participantSessions/")[1];
-    const conferenceRecord = sessionName.split("/participants/")[0];
-    const participantPathId = participantName.split("/participants/")[1];
-    console.log("participant resource:", participantName);
-    console.log("conferenceRecord:", conferenceRecord);
-    console.log("participantPathId:", participantPathId);
-    console.log("participantSessionId:", sessionId);
-
-    // 3) Call the Meet API for the FULL participant object
     const { token } = await oauth2.getAccessToken();
+
+    // 1) Get the participant (name + user id)
     const r = await fetch(`https://meet.googleapis.com/v2/${participantName}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const participant = await r.json();
 
-    console.log("--- Meet API: full participant object ---");
-    console.log("HTTP status:", r.status);
-    console.log(JSON.stringify(participant, null, 2));
-
-    // 4) Broken-out fields (whatever exists)
     let name = "Unknown User";
-    let type = "unknown";
+    let email = null;
     let userId = null;
-    let email = null; // Meet does not expose this; stays null
 
     if (participant?.signedinUser) {
-      type = "signed-in";
       name = participant.signedinUser.displayName || name;
-      userId = participant.signedinUser.user || null; // opaque ID, NOT an email
+      userId = participant.signedinUser.user; // "users/102678972519057276983"
+
+      // 2) Resolve email in REAL TIME via People API
+      const personId = userId.split("/")[1]; // -> "102678972519057276983"
+      const peopleUrl =
+        `https://people.googleapis.com/v1/people/${personId}` +
+        `?personFields=names,emailAddresses` +
+        `&sources=READ_SOURCE_TYPE_PROFILE` +
+        `&sources=READ_SOURCE_TYPE_CONTACT` +
+        `&sources=READ_SOURCE_TYPE_OTHER_CONTACT`;
+
+      const pr = await fetch(peopleUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const person = await pr.json();
+
+      if (pr.ok) {
+        email = person?.emailAddresses?.[0]?.value || null;
+        name = person?.names?.[0]?.displayName || name;
+      } else {
+        console.log("People API error:", JSON.stringify(person));
+      }
     } else if (participant?.anonymousUser) {
-      type = "anonymous";
-      name = participant.anonymousUser.displayName || name;
+      name = participant.anonymousUser.displayName || name; // no email possible
     } else if (participant?.phoneUser) {
-      type = "phone";
-      name = participant.phoneUser.displayName || name;
+      name = participant.phoneUser.displayName || name; // no email possible
     }
 
-    console.log("--- Extracted summary ---");
-    console.log("name:", name);
-    console.log("type:", type);
-    console.log("userId (opaque):", userId);
-    console.log("email:", email);
-    console.log("earliestStartTime:", participant?.earliestStartTime);
-    console.log("latestEndTime:", participant?.latestEndTime);
-    console.log("participant.name:", participant?.name);
-    console.log(`${name} joined the room`);
-    console.log("===================================================");
+    console.log(`${name} (${email || "no email"}) joined the room`);
   } catch (err) {
     console.log("Error:", err.message);
-    console.log("Raw body:", JSON.stringify(req.body, null, 2));
   }
 });
 
