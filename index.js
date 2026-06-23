@@ -19,8 +19,6 @@ app.post("/events", async (req, res) => {
     const decoded = JSON.parse(
       Buffer.from(req.body.message.data, "base64").toString()
     );
-    console.log("Pub/Sub message:", JSON.stringify(req.body, null, 2));
-    console.log("Decoded event:", JSON.stringify(decoded, null, 2));
 
     const sessionName = decoded?.participantSession?.name;
     if (!sessionName) return;
