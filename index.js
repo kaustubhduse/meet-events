@@ -19,6 +19,9 @@ app.post("/events", async (req, res) => {
     const decoded = JSON.parse(
       Buffer.from(req.body.message.data, "base64").toString()
     );
+    console.log("Pub/Sub message:", JSON.stringify(req.body, null, 2));
+    console.log("Decoded event:", JSON.stringify(decoded, null, 2));
+
     const sessionName = decoded?.participantSession?.name;
     if (!sessionName) return;
 
@@ -30,10 +33,12 @@ app.post("/events", async (req, res) => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const participant = await r.json();
+    console.log("Meet participant:", JSON.stringify(participant, null, 2));
 
     let name = "Unknown User";
     let email = null;
     let userId = null;
+    let person = null;
 
     if (participant?.signedinUser) {
       name = participant.signedinUser.displayName || name;
@@ -51,13 +56,12 @@ app.post("/events", async (req, res) => {
       const pr = await fetch(peopleUrl, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const person = await pr.json();
+      person = await pr.json();
+      console.log("People API response:", JSON.stringify(person, null, 2));
 
       if (pr.ok) {
         email = person?.emailAddresses?.[0]?.value || null;
         name = person?.names?.[0]?.displayName || name;
-      } else {
-        console.log("People API error:", JSON.stringify(person));
       }
     } else if (participant?.anonymousUser) {
       name = participant.anonymousUser.displayName || name; // no email possible
@@ -65,7 +69,23 @@ app.post("/events", async (req, res) => {
       name = participant.phoneUser.displayName || name; // no email possible
     }
 
-    console.log(`${name} (${email || "no email"}) joined the room`);
+    console.log(
+      "Join summary:",
+      JSON.stringify(
+        {
+          userId,
+          name,
+          email,
+          sessionName,
+          participantName,
+          decoded,
+          participant,
+          person,
+        },
+        null,
+        2
+      )
+    );
   } catch (err) {
     console.log("Error:", err.message);
   }
